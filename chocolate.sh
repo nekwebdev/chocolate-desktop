@@ -656,7 +656,7 @@ function essentialPkgs() {
 
   _echo_step_info "Install userspace utilities for the management of file systems"; echo
   # https://wiki.archlinux.org/title/File_systems
-  installChrootPkg dosfstools e2fsprogs
+  installChrootPkg dosfstools e2fsprogs mtools
   $CHOCO_BTRFS && installChrootPkg btrfs-progs
   _echo_success
 
@@ -800,7 +800,7 @@ function configureSys() {
   # shellcheck disable=SC2015
   $CHOCO_BTRFS && installChrootPkg grub-btrfs || installChrootPkg grub
   $CHOCO_PROBER && installChrootPkg os-prober
-  installChrootPkg dosfstools e2fsprogs efibootmgr
+  installChrootPkg efibootmgr
   _echo_success
 
   # check if we need to mount an efi partition
