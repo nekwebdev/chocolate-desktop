@@ -1,5 +1,11 @@
 # Arch Linux Chocolate install script
 
+## lotus.conf
+
+This is for my desktop. I need to install on the same ssd as windows 11 so I will not do any partitioning with the script and set the --efi to the partition that has windows EFI. It will be mounted when grub runs.
+
+It also will install and *correctly* (no test YET) setup nvidia-dkms drivers.
+
 [![asciicast](https://asciinema.org/a/UMe5VVeVzu8PhWJOYNrwG12c0.svg)](https://asciinema.org/a/UMe5VVeVzu8PhWJOYNrwG12c0)
 
 ## Yet another install script?
