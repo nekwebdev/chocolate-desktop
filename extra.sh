@@ -15,8 +15,9 @@ set -e
 ###### => variables ############################################################
 CHOCO_USER="" # will ask if left empty
 CHOCO_AUR="paru" # default
-CHOCO_DOTS="https://github.com/nekwebdev/chocodots-template" # will skip if empty
+CHOCO_DOTS="" # will skip if empty
 CHOCO_PKGS="/root/packages.csv" # default
+CHOCO_CONFIG="" # specify a config file path
 # use local repository for dotfiles
 CHOCO_DEV=false
 
@@ -317,6 +318,12 @@ function main() {
 CHOCO_DEV=false
 while (( "$#" )); do
   case "$1" in
+    --config)
+      if [[ -n "$2" ]] && [[ "${2:0:1}" != "-" ]] && [[ -f "$2" ]]; then
+        CHOCO_CONFIG=$2; shift
+      else
+        _exit_with_message "when using --config a path must be specified. Example: '--config /root/myconfig.conf'"
+      fi ;;
     --user)
       if [ -n "$2" ] && [ "${2:0:1}" != "-" ]; then
         CHOCO_USER=$2; shift
@@ -344,6 +351,9 @@ while (( "$#" )); do
       shift ;;
   esac
 done
+
+# source config file for default values
+[[ -f $CHOCO_CONFIG ]] && source "$CHOCO_CONFIG"
 
 [[ -n "$CHOCO_AUR" ]] && case "$CHOCO_AUR" in
   yay)

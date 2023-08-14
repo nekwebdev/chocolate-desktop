@@ -220,6 +220,12 @@ function _echo_banner() {
     _fix_length "$root_text"
     root_text="$FIX_LENGTH_TXT"
 
+    if [[ -n $CHOCO_EFI ]]; then
+      local efi_text=""
+      _fix_length "* Mount /dev/$CHOCO_EFI in /boot/efi for grub"
+      efi_text="$FIX_LENGTH_TXT"
+    fi
+
     _fix_length ""
     data_text="$FIX_LENGTH_TXT"
   fi
@@ -237,7 +243,7 @@ function _echo_banner() {
   _echo_middle "  ██                ██████                                                      "
   _echo_middle "    ██            ██             $data_text"
   _echo_middle "████████████████████████                                                        "
-  _echo_middle "██                    ██                                                        "
+  _echo_middle "██                    ██         $efi_text"
   _echo_middle "  ████████████████████                                                          "
   
   echo; echo
@@ -1172,7 +1178,7 @@ function main() {
   snapperConfig
 
   if [[ -n $CHOCO_EFI ]]; then
-    _echo_step_info "Unmounting /dev/${CHOCO_EFI} from /boot/efi in chroot"; echo
+    _echo_step "Unmounting /dev/${CHOCO_EFI} from /boot/efi in chroot"; echo
     arch-chroot /mnt umount /boot/efi
     _echo_success
   fi
