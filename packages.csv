@@ -1,0 +1,3 @@
+#TAG (A for AUR - G for git and make - P for pip - C for clone only - empty for pacman),NAME IN REPO (or git url),PURPOSE (should be a verb phrase to sound right while installing) Leave empty line at end.
+,dash,"is a POSIX POSIX compliant shell that aims to be as small as possible."
+,ntp,"is the Network Time Protocol reference implementation."
