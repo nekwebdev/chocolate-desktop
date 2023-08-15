@@ -134,8 +134,8 @@ function installXdgUserDirs() {
 function checkRootAndNetwork() {
   _echo_step "Ensure we are root and have internet by installing script dependencies"; echo
   _echo_step "  (Set pacman parallel downloads to 15 and use Colors with ILoveCandy)"
-  sed -i "s/^#ParallelDownloads = 5$/ParallelDownloads = 15/;s/^#Color$/Color/" /etc/pacman.conf
-  grep -q "ILoveCandy" /etc/pacman.conf || sed -i "/#VerbosePkgLists/a ILoveCandy" /etc/pacman.conf
+  sed -i "s/^#ParallelDownloads = 5$/ParallelDownloads = 15/;s/^#Color$/Color/;s/^#VerbosePkgLists$/VerbosePkgLists/" /etc/pacman.conf
+  grep -q "ILoveCandy" /etc/pacman.conf || sed -i "/Color/a ILoveCandy" /etc/pacman.conf
   _echo_success
   _echo_step "  (Install dialog, xdg-user-dirs, base-devel and git)"
   pacman --noconfirm --needed -S dialog xdg-user-dirs base-devel git >/dev/null 2>&1 || _exit_with_message \
@@ -309,7 +309,7 @@ function main() {
   postPackagesConfig
 
   # clean up and save log
-  rm -rf "$0" "$CHOCO_PKGS" /root/chocodots-local
+  rm -rf "$0" "$CHOCO_PKGS" "$CHOCO_CONFIG" /root/chocodots-local
   [[ -f /root/chocolate.extra.log ]] && mv -f /root/chocolate.extra.log /var/log/chocolate.extra.log
   exit 0
 }
@@ -322,7 +322,7 @@ while (( "$#" )); do
       if [[ -n "$2" ]] && [[ "${2:0:1}" != "-" ]] && [[ -f "$2" ]]; then
         CHOCO_CONFIG=$2; shift
       else
-        _exit_with_message "when using --config a path must be specified. Example: '--config ./myconfig.conf'"
+        _exit_with_message "when using --config a path must be specified. Example: '--config myconfig.conf'"
       fi ;;
     --user)
       if [ -n "$2" ] && [ "${2:0:1}" != "-" ]; then
@@ -344,7 +344,7 @@ while (( "$#" )); do
       if [ -n "$2" ] && [ "${2:0:1}" != "-" ]; then
         CHOCO_PKGS=$2; shift
       else
-        _exit_with_message "when using --pkgs a path to the packages csv file must be specified. Example: '--pkgs ./mypkgs.csv'"
+        _exit_with_message "when using --pkgs a path to the packages csv file must be specified. Example: '--pkgs mypkgs.csv'"
       fi ;;
     --dev) CHOCO_DEV=true; shift ;;
     *)

@@ -39,12 +39,30 @@ CHOCO_AUR="" # install an aur helper, yay or paru, will not install if empty
 CHOCO_VM=false # install vm drivers
 CHOCO_XORG=false # install xorg-server with vga drivers
 CHOCO_NVIDIA=false # use NVIDIA proprietary drivers
-CHOCO_EXTRA=false # run extra script chrooted as root in /mnt at the end of the install, all arguments given to chocolate.sh will be passed to that script.
-CHOCO_PKGS="packages.csv" # path to the packages list csv file for extra.sh
+CHOCO_EXTRA=false # run extra configuration and create a privileged user.
+CHOCO_USER="" # will ask if left empty
 CHOCO_CONFIG="" # specify a config file path
 
 # copy local repository for dotfiles in extra.sh
 CHOCO_DEV=false
+
+###### => files templates ######################################################
+# exmple file templates
+# /usr/share/libalpm/hooks/shtodash.hook
+DASH_HOOK="$(cat <<-EOF
+[Trigger]
+Type = Package
+Operation = Install
+Operation = Upgrade
+Target = bash
+
+[Action]
+Description = Re-pointing /bin/sh symlink to dash...
+When = PostTransaction
+Exec = /usr/bin/ln -sfT /usr/bin/dash /usr/bin/sh
+Depends = dash
+EOF
+)"
 
 ###### => display help screen ##################################################
 function displayHelp() {
@@ -62,7 +80,7 @@ function displayHelp() {
     echo "                [--keymap] $CHOCO_KEYMAP [--lang] $CHOCO_LANG [--locale] $CHOCO_LOCALE"
     echo "                [--vfont] $CHOCO_VFONT [--fontmap] $CHOCO_FONTMAP"
     echo "                [--hostname] $CHOCO_HOSTNAME"
-    echo "                [--aur] paru [--vm] [--xorg] [--nvidia] [--extra]"
+    echo "                [--aur] paru [--vm] [--xorg] [--nvidia] [--extra] [--user] username"
     echo
     echo "  Options:"
     echo "    -h --help    Show this screen."
@@ -107,8 +125,8 @@ function displayHelp() {
     echo "    --vm         Install virtual machine drivers, defaults to off."
     echo "    --xorg       Install xorg-server and vga drivers, defaults to off."
     echo "    --nvidia     Use proprietary NVIDIA drivers, defaults to off."
-    echo "    --extra      Run an extra script chrooted as root in /mnt at the end, defaults to off."
-    echo "                 All arguments given to chocolate.sh will be passed to that script."
+    echo "    --extra      Create a user with proper xdg directories and extra configuration."
+    echo "    --user       Username to use, defaults to prompting it."
     echo "    --pkgs       csv file for the extra script."
     echo
     exit 0
@@ -260,7 +278,7 @@ function _echo_banner() {
   [[ -n $CHOCO_AUR ]] && add_text="$add_text * $CHOCO_AUR"
   $CHOCO_XORG && add_text="$add_text * xorg-server"
   $CHOCO_NVIDIA && add_text="$add_text * NVIDIA prorietary drivers" || add_text="$add_text * opensource vga drivers"
-  $CHOCO_EXTRA && add_text="$add_text * extra script"
+  $CHOCO_EXTRA && add_text="$add_text * extra configuration"
   [[ -n $add_text ]] && _echo_middle "Post vanilla:$add_text" && echo
   _echo_middle "* This is the way *"
   echo
@@ -380,11 +398,9 @@ function parseArguments() {
       --xorg) CHOCO_XORG=true; shift ;;
       --nvidia) CHOCO_NVIDIA=true; shift ;;
       --extra) CHOCO_EXTRA=true; shift ;;
-      --pkgs)
+      --user)
         if [ -n "$2" ] && [ "${2:0:1}" != "-" ]; then
-          CHOCO_PKGS=$2; shift
-        else
-          _exit_with_message "when using --pkgs a path to the packages csv file must be specified. Example: '--pkgs mypkgs.csv'"
+          CHOCO_USER=$2; shift
         fi ;;
       --dev) CHOCO_DEV=true; shift ;;
       --*|-*=) shift ;; # unsupported flags ignored to be passed to extra
@@ -402,8 +418,9 @@ function installChrootPkg() { arch-chroot /mnt pacman --noconfirm --needed -S "$
 
 function checkRootAndNetwork() {
   _echo_step "Ensure we are root and have internet by installing script dependencies"; echo; echo
-  _echo_step_info "Set parallel downloads to 15"
-  sed -i "s/^#ParallelDownloads = 5$/ParallelDownloads = 15/" /etc/pacman.conf
+  _echo_step_info "Set parallel downloads to 15 and make it look pretty"
+  sed -i "s/^#ParallelDownloads = 5$/ParallelDownloads = 15/;s/^#Color$/Color/;s/^#VerbosePkgLists$/VerbosePkgLists/" /etc/pacman.conf
+  grep -q "ILoveCandy" /etc/pacman.conf || sed -i "/Color/a ILoveCandy" /etc/pacman.conf
   _echo_success
   
   pacman --noconfirm --needed -Sy archlinux-keyring expect dialog dmidecode pacman-contrib || _exit_with_message "Are you root, on Archlinux ISO and with an internet connection?"
@@ -650,10 +667,6 @@ function essentialPkgs() {
   cp -f /etc/pacman.d/mirrorlist.bak /mnt/etc/pacman.d/mirrorlist.bak
   _echo_success
 
-  _echo_step_info "Set parallel downloads to 15 in new system"
-  sed -i "s/^#ParallelDownloads = 5$/ParallelDownloads = 15/" /mnt/etc/pacman.conf
-  _echo_success
-
   _echo_step_info "Install userspace utilities for the management of file systems"; echo
   # https://wiki.archlinux.org/title/File_systems
   installChrootPkg dosfstools e2fsprogs mtools
@@ -751,7 +764,7 @@ function configureSys() {
   _echo_success
 
   _echo_step_info "Install and enable networkmanager"; echo
-  arch-chroot /mnt systemctl enable NetworkManager
+  arch-chroot /mnt systemctl enable NetworkManager.service
   _echo_success
 
   # https://wiki.archlinux.org/title/installation_guide#Initramfs
@@ -1054,7 +1067,7 @@ function vgaDrivers() {
 
       _echo_step_info "Add NVIDIA modules to mkinitcpio and generate /boot/initramfs-custom.img"; echo
       sed -i "s/^MODULES=(/&nvidia nvidia_modeset nvidia_uvm nvidia_drm /" /mnt/etc/mkinitcpio.conf
-      arch-chroot /mnt mkinitcpio --config /etc/mkinitcpio.conf --generate /boot/initramfs-custom.img
+      arch-chroot /mnt mkinitcpio --config /etc/mkinitcpio.conf --generate /boot/initramfs-custom.img -p "$CHOCO_KERNEL" 
       _echo_success
 
       _echo_step_info "Add nvidia-drm settings to modeprobe.d"; echo
@@ -1125,15 +1138,116 @@ function installXorg() {
   arch-chroot /mnt pacman -Qe > /mnt/var/log/chocolate_packages_list_05_xorg.log
 }
 
-function extraScript() {
+function configureXdgUserDirs() {
+  _echo_step "Configure xdg-user-dirs"; echo
+  _echo_step "  (Configure xdg-user-dirs defaults)"
+  sed -i "/DESKTOP/d" /mnt/etc/xdg/user-dirs.defaults
+  sed -i "s/Downloads/downloads/" /mnt/etc/xdg/user-dirs.defaults
+  sed -i "s+Templates+documents/templates+" /mnt/etc/xdg/user-dirs.defaults
+  sed -i "/PUBLICSHARE/d" /mnt/etc/xdg/user-dirs.defaults
+  sed -i "s/Documents/documents/" /mnt/etc/xdg/user-dirs.defaults
+  sed -i "s+Music+documents/music+" /mnt/etc/xdg/user-dirs.defaults
+  sed -i "s+Pictures+documents/pictures+" /mnt/etc/xdg/user-dirs.defaults
+  sed -i "s+Videos+documents/videos+" /mnt/etc/xdg/user-dirs.defaults
+  _echo_success
+
+  _echo_step "  (Add .local/src folder to /etc/skel)"
+  mkdir -p /mnt/etc/skel/.local/src
+  _echo_success; echo
+}
+
+function configurePrivilegedUser() {
+  configureXdgUserDirs
+
+  # prompts
+  if [[ -z "$CHOCO_USER" ]]; then
+    CHOCO_USER=$(dialog --inputbox "Enter a name for the user account." 10 60 3>&1 1>&2 2>&3 3>&1) || exit 1
+    while ! echo "$CHOCO_USER" | grep -q "^[a-z_][a-z0-9_-]*$"; do
+      CHOCO_USER=$(dialog --no-cancel --inputbox "Username not valid. Give a username beginning with a letter, with only lowercase letters, - or _." 10 60 3>&1 1>&2 2>&3 3>&1)
+    done
+  fi
+  local pass1=$(dialog --no-cancel --passwordbox "Enter a password for $CHOCO_USER." 10 60 3>&1 1>&2 2>&3 3>&1)
+  local pass2=$(dialog --no-cancel --passwordbox "Retype $CHOCO_USER password." 10 60 3>&1 1>&2 2>&3 3>&1)
+  while ! [ "$pass1" = "$pass2" ]; do
+    unset pass2
+    pass1=$(dialog --no-cancel --passwordbox "Passwords do not match for $CHOCO_USER.\\n\\nEnter password again." 10 60 3>&1 1>&2 2>&3 3>&1)
+    pass2=$(dialog --no-cancel --passwordbox "Retype $CHOCO_USER password." 10 60 3>&1 1>&2 2>&3 3>&1)
+  done
+  unset pass2
+
+  printf '\033c'; echo
+  
+  _echo_step "Create $CHOCO_USER user"; echo
+  arch-chroot /mnt useradd -g wheel -s /bin/bash -d /home/"$CHOCO_USER" -m -k /etc/skel "$CHOCO_USER"
+  {
+    echo "$pass1";
+    echo "$pass1";
+  } | arch-chroot /mnt passwd "$CHOCO_USER" >/dev/null 2>&1
+  unset pass1
+  _echo_step "  (User created)"
+  _echo_success
+
+
+  _echo_step "  (Generate $CHOCO_USER xdg-user-dirs)"
+  arch-chroot /mnt /bin/su - "$CHOCO_USER" -c "xdg-user-dirs-update"
+  _echo_success
+
+  _echo_step "  (Add wheel group to sudoers)"
+  mkdir -p /mnt/etc/sudoers.d/
+  echo "%wheel ALL=(ALL) ALL" > /mnt/etc/sudoers.d/10-wheel
+  chmod 640 /mnt/etc/sudoers.d/10-wheel
+  _echo_success; echo
+}
+
+function extraConfig() {
   ! $CHOCO_EXTRA && return
-  $CHOCO_DEV && cp -rf /root/chocodots-local /mnt/root
-  cp -f extra.sh /mnt/root
-  cp -f "$CHOCO_PKGS" /mnt/root
-  chmod +x /mnt/root/extra.sh
-  echo
-  _echo_title "Run extra script in arch-chroot as root"; echo
-  arch-chroot /mnt /root/extra.sh "$@"
+  _echo_title "Run extra setup in arch-chroot"; echo
+
+  _echo_step "Ensure we are root and have internet by installing script dependencies"; echo
+  _echo_step "  (Set pacman parallel downloads to 15 and use Colors with ILoveCandy)"
+  sed -i "s/^#ParallelDownloads = 5$/ParallelDownloads = 15/;s/^#Color$/Color/;s/^#VerbosePkgLists$/VerbosePkgLists/" /mnt/etc/pacman.conf
+  grep -q "ILoveCandy" /mnt/etc/pacman.conf || sed -i "/Color/a ILoveCandy" /mnt/etc/pacman.conf
+  _echo_success
+
+  _echo_step "  (Installing required packages)"
+  installChrootPkg dialog xdg-user-dirs base-devel git dash ntp
+  _echo_success;
+
+  _echo_step "  (Use all cores when compressing packages and for compilation)"
+  sed -i "s/^COMPRESSXZ=(.*/COMPRESSXZ=(xz -c -z - --threads=0)/" /mnt/etc/makepkg.conf
+  sed -i "s/-j2/-j$(nproc)/;s/^#MAKEFLAGS/MAKEFLAGS/" /mnt/etc/makepkg.conf
+  _echo_success
+
+  _echo_step "  (Configure journald to be persistent at a 500M limit)"
+  mkdir -p /mnt/etc/systemd/journald.conf.d
+	local persist_conf=/mnt/etc/systemd/journald.conf.d/00-persistent-storage.conf
+	echo "[Journal]" > "$persist_conf"
+	echo "Storage=persistent" >> "$persist_conf"
+	local size_conf=/mnt/etc/systemd/journald.conf.d/00-journal-size.conf
+	echo "[Journal]" > "$size_conf"
+	echo "SystemMaxUse=500M" >> "$size_conf"
+  _echo_success; echo
+
+  _echo_step "System configuration after packages are installed"; echo
+
+  _echo_step "  (Enable ntpd service)"
+  arch-chroot /mnt systemctl enable -f ntpd.service >/dev/null 2>&1
+  _echo_success
+
+	if arch-chroot /mnt command -v /usr/bin/dash >/dev/null 2>&1; then
+    _echo_step "  (Set dash as symlink for sh instead of bash)"
+    ln -sfT /usr/bin/dash /mnt/usr/bin/sh
+    echo "$DASH_HOOK" > /mnt/usr/share/libalpm/hooks/shtodash.hook
+    _echo_success
+  fi
+
+  configurePrivilegedUser
+
+  cp -f extra.sh /mnt/home/$CHOCO_USER/
+
+  # export a package list at current step
+  arch-chroot /mnt pacman -Qe > /mnt/var/log/chocolate_packages_list_06_extra.log
+
 }
 
 ###### => main #################################################################
@@ -1174,7 +1288,7 @@ function main() {
 
   installXorg
 
-  extraScript "$@"
+  extraConfig
 
   snapperConfig
 
