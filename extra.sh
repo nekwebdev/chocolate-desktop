@@ -16,7 +16,7 @@ set -e
 CHOCO_USER="" # will ask if left empty
 CHOCO_AUR="paru" # default
 CHOCO_DOTS="" # will skip if empty
-CHOCO_PKGS="/root/packages.csv" # default
+CHOCO_PKGS="packages.csv" # default
 CHOCO_CONFIG="" # specify a config file path
 # use local repository for dotfiles
 CHOCO_DEV=false
@@ -322,7 +322,7 @@ while (( "$#" )); do
       if [[ -n "$2" ]] && [[ "${2:0:1}" != "-" ]] && [[ -f "$2" ]]; then
         CHOCO_CONFIG=$2; shift
       else
-        _exit_with_message "when using --config a path must be specified. Example: '--config /root/myconfig.conf'"
+        _exit_with_message "when using --config a path must be specified. Example: '--config ./myconfig.conf'"
       fi ;;
     --user)
       if [ -n "$2" ] && [ "${2:0:1}" != "-" ]; then
@@ -344,7 +344,7 @@ while (( "$#" )); do
       if [ -n "$2" ] && [ "${2:0:1}" != "-" ]; then
         CHOCO_PKGS=$2; shift
       else
-        _exit_with_message "when using --pkgs a path to the packages csv file must be specified. Example: '--pkgs /root/mypkgs.csv'"
+        _exit_with_message "when using --pkgs a path to the packages csv file must be specified. Example: '--pkgs ./mypkgs.csv'"
       fi ;;
     --dev) CHOCO_DEV=true; shift ;;
     *)

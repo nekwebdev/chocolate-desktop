@@ -40,7 +40,7 @@ CHOCO_VM=false # install vm drivers
 CHOCO_XORG=false # install xorg-server with vga drivers
 CHOCO_NVIDIA=false # use NVIDIA proprietary drivers
 CHOCO_EXTRA=false # run extra script chrooted as root in /mnt at the end of the install, all arguments given to chocolate.sh will be passed to that script.
-CHOCO_PKGS="/root/packages.csv" # path to the packages list csv file for extra.sh
+CHOCO_PKGS="packages.csv" # path to the packages list csv file for extra.sh
 CHOCO_CONFIG="" # specify a config file path
 
 # copy local repository for dotfiles in extra.sh
@@ -109,7 +109,7 @@ function displayHelp() {
     echo "    --nvidia     Use proprietary NVIDIA drivers, defaults to off."
     echo "    --extra      Run an extra script chrooted as root in /mnt at the end, defaults to off."
     echo "                 All arguments given to chocolate.sh will be passed to that script."
-    echo "    --pkgs       Path to packages csv file for the extra script, defaults to '$CHOCO_PKGS'."
+    echo "    --pkgs       csv file for the extra script."
     echo
     exit 0
 }
@@ -259,7 +259,7 @@ function _echo_banner() {
   $CHOCO_VM && add_text="$add_text * vm drivers"
   [[ -n $CHOCO_AUR ]] && add_text="$add_text * $CHOCO_AUR"
   $CHOCO_XORG && add_text="$add_text * xorg-server"
-  $CHOCO_NVIDIA && add_text="$add_text * NVIDIA prorietary drivers" || $CHOCO_XORG && add_text="$add_text * opensource vga drivers"
+  $CHOCO_NVIDIA && add_text="$add_text * NVIDIA prorietary drivers" || add_text="$add_text * opensource vga drivers"
   $CHOCO_EXTRA && add_text="$add_text * extra script"
   [[ -n $add_text ]] && _echo_middle "Post vanilla:$add_text" && echo
   _echo_middle "* This is the way *"
@@ -267,7 +267,7 @@ function _echo_banner() {
 }
 
 function _echo_exit_chocolate() {
-  [[ -f /root/chocolate.log ]] && cp -f /root/chocolate.log /mnt/var/log
+  [[ -f ./chocolate.log ]] && cp -f ./chocolate.log /mnt/var/log
   echo
   _echo_title "Chocolate is done, time to reboot"
   echo
@@ -286,7 +286,7 @@ function parseArguments() {
         if [[ -n "$2" ]] && [[ "${2:0:1}" != "-" ]] && [[ -f "$2" ]]; then
           CHOCO_CONFIG=$2; shift
         else
-          _exit_with_message "when using --config a path must be specified. Example: '--config /root/myconfig.conf'"
+          _exit_with_message "when using --config a path must be specified. Example: '--config myconfig.conf'"
         fi ;;
       --drive)
         if [[ -n "$2" ]] && [[ "${2:0:1}" != "-" ]]; then
@@ -384,7 +384,7 @@ function parseArguments() {
         if [ -n "$2" ] && [ "${2:0:1}" != "-" ]; then
           CHOCO_PKGS=$2; shift
         else
-          _exit_with_message "when using --pkgs a path to the packages csv file must be specified. Example: '--pkgs /root/mypkgs.csv'"
+          _exit_with_message "when using --pkgs a path to the packages csv file must be specified. Example: '--pkgs mypkgs.csv'"
         fi ;;
       --dev) CHOCO_DEV=true; shift ;;
       --*|-*=) shift ;; # unsupported flags ignored to be passed to extra
@@ -1121,7 +1121,6 @@ function installXorg() {
   _echo_step "Install xorg server"; echo; echo
   installChrootPkg xorg-server
   _echo_success
-  vgaDrivers
   # export a package list at current step
   arch-chroot /mnt pacman -Qe > /mnt/var/log/chocolate_packages_list_05_xorg.log
 }
@@ -1129,7 +1128,7 @@ function installXorg() {
 function extraScript() {
   ! $CHOCO_EXTRA && return
   $CHOCO_DEV && cp -rf /root/chocodots-local /mnt/root
-  cp -f /root/extra.sh /mnt/root
+  cp -f extra.sh /mnt/root
   cp -f "$CHOCO_PKGS" /mnt/root
   chmod +x /mnt/root/extra.sh
   echo
@@ -1170,6 +1169,8 @@ function main() {
   vmguestDrivers
 
   installAurHelper
+
+  vgaDrivers
 
   installXorg
 
@@ -1229,6 +1230,6 @@ $CHOCO_LTS && CHOCO_KERNEL="linux-lts"
     _exit_with_message "Unknown aur helper, use paru or yay"
     ;;
 esac
-main "$@" | tee /root/chocolate.log
+main "$@" | tee ./chocolate.log
 
 exit
