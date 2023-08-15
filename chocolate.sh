@@ -279,6 +279,7 @@ function _echo_banner() {
   $CHOCO_XORG && add_text="$add_text * xorg-server"
   $CHOCO_NVIDIA && add_text="$add_text * NVIDIA prorietary drivers" || add_text="$add_text * opensource vga drivers"
   $CHOCO_EXTRA && add_text="$add_text * extra configuration"
+  [[ -n $CHOCO_USER ]] && add_text="$add_text * Create user: $CHOCO_USER"
   [[ -n $add_text ]] && _echo_middle "Post vanilla:$add_text" && echo
   _echo_middle "* This is the way *"
   echo
@@ -728,7 +729,7 @@ function configureSys() {
 
   # https://wiki.archlinux.org/title/installation_guide#Time_zone
   _echo_step "Timezone"; echo; echo
-  ln -sf /usr/share/zoneinfo/"$CHOCO_REGION" /mnt/etc/localtime
+  ln -sfT /usr/share/zoneinfo/"$CHOCO_REGION" /mnt/etc/localtime
   _echo_step_info "Sending hwclock command to arch-chroot"; echo
   arch-chroot /mnt hwclock --systohc
   _echo_success
@@ -1071,27 +1072,28 @@ function vgaDrivers() {
       _echo_success
 
       _echo_step_info "Add nvidia-drm settings to modeprobe.d"; echo
-      echo "options nvidia-drm modeset=1" > /etc/modprobe.d/nvidia.conf
-      echo 'options nvidia "NVreg_UsePageAttributeTable=1"' >> /etc/modprobe.d/nvidia.conf
-      echo 'options nvidia "NVreg_PreserveVideoMemoryAllocations=1"' >> /etc/modprobe.d/nvidia.conf
-      echo 'options nvidia "NVreg_TemporaryFilePath=/var/tmp"' >> /etc/modprobe.d/nvidia.conf
-      echo 'options nvidia "NVreg_EnableS0ixPowerManagement=1"' >> /etc/modprobe.d/nvidia.conf
+      local nvidia_conf=/mnt/etc/modprobe.d/nvidia.conf
+      echo "options nvidia-drm modeset=1" > "$nvidia_conf"
+      echo 'options nvidia "NVreg_UsePageAttributeTable=1"' >> "$nvidia_conf"
+      echo 'options nvidia "NVreg_PreserveVideoMemoryAllocations=1"' >> "$nvidia_conf"
+      echo 'options nvidia "NVreg_TemporaryFilePath=/var/tmp"' >> "$nvidia_conf"
+      echo 'options nvidia "NVreg_EnableS0ixPowerManagement=1"' >> "$nvidia_conf"
       _echo_success
 
       _echo_step_info "Create pacman hook to update nvidia module in initcpio"
       mkdir -p /mnt/usr/share/libalpm/hooks
       # shellcheck disable=SC2154
-      cat <<EOF > /mnt/usr/share/libalpm/hooks/50-nvidia.hook 
+      cat <<EOF > /mnt/usr/share/libalpm/hooks/50-nvidia-dkms.hook 
 [Trigger]
 Operation=Install
 Operation=Upgrade
 Operation=Remove
 Type=Package
-Target=nvidia
+Target=nvidia-dkms
 Target=$CHOCO_KERNEL
 
 [Action]
-Description=Update Nvidia module in initcpio
+Description=Update Nvidia DKMS module in initcpio
 Depends=mkinitcpio
 When=PostTransaction
 NeedsTargets
@@ -1231,10 +1233,10 @@ function extraConfig() {
   _echo_step "System configuration after packages are installed"; echo
 
   _echo_step "  (Enable ntpd service)"
-  arch-chroot /mnt systemctl enable -f ntpd.service >/dev/null 2>&1
+  arch-chroot /mnt systemctl enable -f ntpd.service
   _echo_success
 
-	if arch-chroot /mnt command -v /usr/bin/dash >/dev/null 2>&1; then
+	if arch-chroot /mnt /bin/sh -c "command -v /usr/bin/dash" >/dev/null 2>&1; then
     _echo_step "  (Set dash as symlink for sh instead of bash)"
     ln -sfT /usr/bin/dash /mnt/usr/bin/sh
     echo "$DASH_HOOK" > /mnt/usr/share/libalpm/hooks/shtodash.hook
