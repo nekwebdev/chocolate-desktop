@@ -101,7 +101,7 @@ function displayHelp() {
     echo "    --btrfs      Use the btrfs filesystem with @root, @home, @var_log and @snapshots subvolumes, defaults to off."
     echo "    --snapper    Install and setup snapper for managing btrfs automatic snapshots, defaults to off."
     echo "    --prober     Setup grub to use os-prober for multiboot, defaults to off."
-    echo "    --efi        Mount an existing windows EFI partition before creating the grub config."
+    echo "    --efi        Mount an existing EFI partition before creating the grub config."
     echo
     echo "    ############ System setup:"
     echo
@@ -202,8 +202,15 @@ function _echo_banner() {
 
   _fix_length "* 550M fat32 boot EFI partition"
   local boot_text="$FIX_LENGTH_TXT"
-
-  _fix_length "* $CHOCO_SWAP swap partition"
+  if [[ -n $CHOCO_SWAP ]]; then
+    if [[ $CHOCO_SWAPFILE ]]; then
+      _fix_length "* $CHOCO_SWAP swap file"
+    else
+      _fix_length "* $CHOCO_SWAP swap partition"
+    fi
+  else
+    _fix_length "* no swap"
+  fi
   local swap_text="$FIX_LENGTH_TXT"
 
   local root_text="ext4 root partition"
@@ -496,7 +503,7 @@ function partitionDisk() {
   sgdisk --new=1:0:+550MiB --typecode=1:ef00 --change-name=1:EFI-NIX "$1"
   _echo_success
 
-  if ! $CHOCO_SWAPFILE; then
+  if ! $CHOCO_SWAPFILE && [[ -n "$CHOCO_SWAP" ]]; then
     _echo_step_info "Create $CHOCO_SWAP swap partition"; echo
     sgdisk --new=2:0:+"$CHOCO_SWAP"iB --typecode=2:8200 --change-name=2:"$($CHOCO_LUKS && echo 'cryptswap' || echo 'swap')" "$1"
     _echo_success
@@ -1143,7 +1150,7 @@ function installXorg() {
 function configureXdgUserDirs() {
   _echo_step "Configure xdg-user-dirs"; echo
   _echo_step "  (Configure xdg-user-dirs defaults)"
-  sed -i "/DESKTOP/d" /mnt/etc/xdg/user-dirs.defaults
+  sed -i "s/Desktop/desktop/" /mnt/etc/xdg/user-dirs.defaults
   sed -i "s/Downloads/downloads/" /mnt/etc/xdg/user-dirs.defaults
   sed -i "s+Templates+documents/templates+" /mnt/etc/xdg/user-dirs.defaults
   sed -i "/PUBLICSHARE/d" /mnt/etc/xdg/user-dirs.defaults

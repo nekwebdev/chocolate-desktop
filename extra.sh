@@ -87,6 +87,7 @@ function pacmanInstall() {
 }
 
 function installPackages() {
+  [[ -z $1 ]] && return
   _echo_step "Installing required packages"; echo
 	([ -f "$1" ] && cp "$1" /tmp/packages.csv) || curl -Ls "$1" | sed '/^#/d' > /tmp/packages.csv
   TOTAL_PKG=$(wc -l < /tmp/packages.csv)
