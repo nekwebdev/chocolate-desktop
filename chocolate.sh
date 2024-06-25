@@ -247,7 +247,7 @@ function _echo_banner() {
 
     if [[ -n $CHOCO_EFI ]]; then
       local efi_text=""
-      _fix_length "* Mount /dev/$CHOCO_EFI in /boot/efi for grub"
+      _fix_length "* Will mount /dev/$CHOCO_EFI in /boot/efi for grub"
       efi_text="$FIX_LENGTH_TXT"
     fi
 
@@ -498,28 +498,31 @@ function partitionDisk() {
   _echo_step_info "fragpuccino $1, bye bye baby"; echo
   sgdisk --zap-all --clear "$1"
   _echo_success
-
+  part_cnt=1
   _echo_step_info "Create 550 MiB EFI partition"; echo
-  sgdisk --new=1:0:+550MiB --typecode=1:ef00 --change-name=1:EFI-NIX "$1"
+  sgdisk --new=$part_cnt:0:+550MiB --typecode=$part_cnt:ef00 --change-name=$part_cnt:EFI-NIX "$1"
   _echo_success
 
   if ! $CHOCO_SWAPFILE && [[ -n "$CHOCO_SWAP" ]]; then
     _echo_step_info "Create $CHOCO_SWAP swap partition"; echo
-    sgdisk --new=2:0:+"$CHOCO_SWAP"iB --typecode=2:8200 --change-name=2:"$($CHOCO_LUKS && echo 'cryptswap' || echo 'swap')" "$1"
+    part_cnt=$((part_cnt+1))
+    sgdisk --new=$part_cnt:0:+"$CHOCO_SWAP"iB --typecode=$part_cnt:8200 --change-name=$part_cnt:"$($CHOCO_LUKS && echo 'cryptswap' || echo 'swap')" "$1"
     _echo_success
   fi
 
   # shellcheck disable=SC2015
   [[ -n $CHOCO_ROOT ]] && local root_text="Create $CHOCO_ROOT root partition" || local root_text="Create root partition with the remaining space"
 
+  part_cnt=$((part_cnt+1))
   _echo_step_info "$root_text"; echo
   # sgdisk --new=3:0:+"$CHOCO_ROOT" --typecode=3:8300 --change-name=3:cryptsystem "$1"
-  sgdisk --new=3:0:"$([[ -n $CHOCO_ROOT ]] && echo "+${CHOCO_ROOT}iB" || echo "0")" --typecode=3:8300 --change-name=3:"$($CHOCO_LUKS && echo 'cryptsystem' || echo 'system')" "$1"
+  sgdisk --new=$part_cnt:0:"$([[ -n $CHOCO_ROOT ]] && echo "+${CHOCO_ROOT}iB" || echo "0")" --typecode=$part_cnt:8300 --change-name=$part_cnt:"$($CHOCO_LUKS && echo 'cryptsystem' || echo 'system')" "$1"
   _echo_success
 
   if ($CHOCO_DATA && [[ -n $CHOCO_ROOT ]]); then
     _echo_step_info "Create data partition with the remaining space"; echo
-    sgdisk --new=4:0:0 --typecode=4:8300 --change-name=4:data "$1"
+    part_cnt=$((part_cnt+1))
+    sgdisk --new=$part_cnt:0:0 --typecode=$part_cnt:8300 --change-name=$part_cnt:data "$1"
     _echo_success
   fi
   # print new partitions and pause to let system reload partition information
