@@ -1076,6 +1076,7 @@ function vgaDrivers() {
         echo "[multilib]" | sudo tee -a /mnt/etc/pacman.conf > /dev/null
         echo "Include = /etc/pacman.d/mirrorlist" | sudo tee -a /mnt/etc/pacman.conf > /dev/null
         arch-chroot /mnt pacman -Sy
+    fi
     _echo_success
 
     if $CHOCO_NVIDIA; then
@@ -1083,7 +1084,6 @@ function vgaDrivers() {
       _echo_step_info "Install NVIDIA prorietary gpu drivers"; echo
       installChrootPkg linux-headers nvidia-dkms nvidia-utils nvidia-settings lib32-nvidia-utils
       _echo_success
-
     else
       # https://wiki.archlinux.org/title/Nouveau
       _echo_step_info "Install NVIDIA open source gpu drivers"; echo
