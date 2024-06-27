@@ -1299,8 +1299,8 @@ function main() {
   snapperConfig
 
   if [[ -n $CHOCO_EFI ]]; then
-    _echo_step "Unmounting /dev/${CHOCO_EFI} from /boot/efi in chroot"; echo
-    arch-chroot /mnt umount /boot/efi
+    _echo_step "Unmounting /dev/${CHOCO_EFI} from $CHOCO_EFI_PATH in chroot"; echo
+    arch-chroot /mnt umount "$CHOCO_EFI_PATH"
     _echo_success
   fi
 
