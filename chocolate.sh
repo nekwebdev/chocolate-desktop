@@ -18,7 +18,8 @@ CHOCO_LUKS=false # LUKS encrypt swap and root partitions
 CHOCO_BTRFS=false # use btrfs for root, @root, @home, @var_log and @snapshots subvolumes will be setup
 CHOCO_SNAPPER=false # configure snapper for automatic snapshots of the @root subvolume.
 CHOCO_PROBER=false # probe for other os when configuring grub
-CHOCO_EFI="" # windows efi partition to mount to /boot/efi in chroot for dual boot
+CHOCO_EFI="" # windows efi partition to mount to /CHOCO_EFI_PATH in chroot for dual boot
+CHOCO_EFI_PATH="/boot" # path to mount the efi partition
 
 # system
 CHOCO_ZEN=false # use the zen kernel
@@ -247,7 +248,7 @@ function _echo_banner() {
 
     if [[ -n $CHOCO_EFI ]]; then
       local efi_text=""
-      _fix_length "* Will mount /dev/$CHOCO_EFI in /boot/efi for grub"
+      _fix_length "* Will mount /dev/$CHOCO_EFI in $CHOCO_EFI_PATH for grub"
       efi_text="$FIX_LENGTH_TXT"
     fi
 
@@ -703,6 +704,15 @@ function essentialPkgs() {
   if [[ -n $microcode ]]; then
     _echo_step_info "Install microcode: $microcode"; echo
     installChrootPkg "$microcode"
+    if [[ $microcode == "amd-ucode" ]]; then
+      _echo_step_info "Add AMD pstate to bootloader"; echo
+      sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="[^"]*/& amd_pstate=active/' /mnt/etc/default/grub
+      _echo_success
+
+      _echo_step_info "Generate new grub config"; echo
+      arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg
+      _echo_success
+    fi
     _echo_success
   else
     echo
@@ -828,17 +838,15 @@ function configureSys() {
   _echo_success
 
   # check if we need to mount an efi partition
-  local efi_dir="/boot"
+  arch-chroot /mnt mkdir -p "$CHOCO_EFI_PATH"
   if [[ -n $CHOCO_EFI ]]; then
-    _echo_step_info "Mounting /dev/${CHOCO_EFI} to /boot/efi in chroot"; echo
-    arch-chroot /mnt mkdir /boot/efi
-    arch-chroot /mnt mount /dev/"$CHOCO_EFI" /boot/efi
-    efi_dir="/boot/efi"
+    _echo_step_info "Mounting /dev/${CHOCO_EFI} to $CHOCO_EFI_PATH in chroot"; echo
+    arch-chroot /mnt mount /dev/"$CHOCO_EFI" "$CHOCO_EFI_PATH"
     _echo_success
   fi
 
   _echo_step_info "Run grub-install"; echo
-  arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory="$efi_dir" --bootloader-id=GRUB
+  arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory="$CHOCO_EFI_PATH" --bootloader-id=GRUB
   _echo_success
 
   if $CHOCO_LUKS; then
@@ -1062,65 +1070,51 @@ function vgaDrivers() {
   _echo_step "Install vga drivers"; echo; echo
 
   if lspci -k | grep -A 2 -E "(VGA|3D)" | grep NVIDIA; then
+    # activate multilib in pacman.conf
+     _echo_step_info "Enabling multilib repository in pacman..."; echo
+    if ! grep -q "^\s*\[multilib\]" /mnt/etc/pacman.conf; then
+        echo "[multilib]" | sudo tee -a /mnt/etc/pacman.conf > /dev/null
+        echo "Include = /etc/pacman.d/mirrorlist" | sudo tee -a /mnt/etc/pacman.conf > /dev/null
+        arch-chroot /mnt pacman -Sy
+    _echo_success
+
     if $CHOCO_NVIDIA; then
       # https://wiki.archlinux.org/title/NVIDIA
       _echo_step_info "Install NVIDIA prorietary gpu drivers"; echo
-      installChrootPkg linux-headers nvidia-dkms nvidia-utils nvidia-settings 
+      installChrootPkg linux-headers nvidia-dkms nvidia-utils nvidia-settings lib32-nvidia-utils
       _echo_success
 
-      _echo_step_info "Add nvidia_drm to bootloader"; echo
-      sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="[^"]*/& nvidia_drm.modeset=1/' /mnt/etc/default/grub
-      _echo_success
-
-      _echo_step_info "Generate new grub config"; echo
-      arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg
-      _echo_success
-
-      _echo_step_info "Add NVIDIA modules to mkinitcpio and generate /boot/initramfs-custom.img"; echo
-      sed -i "s/^MODULES=(/&nvidia nvidia_modeset nvidia_uvm nvidia_drm /" /mnt/etc/mkinitcpio.conf
-      arch-chroot /mnt mkinitcpio --config /etc/mkinitcpio.conf --generate /boot/initramfs-custom.img -p "$CHOCO_KERNEL" 
-      _echo_success
-
-      _echo_step_info "Add nvidia-drm settings to modeprobe.d"; echo
-      local nvidia_conf=/mnt/etc/modprobe.d/nvidia.conf
-      echo "options nvidia-drm modeset=1" > "$nvidia_conf"
-      echo 'options nvidia "NVreg_UsePageAttributeTable=1"' >> "$nvidia_conf"
-      echo 'options nvidia "NVreg_PreserveVideoMemoryAllocations=1"' >> "$nvidia_conf"
-      echo 'options nvidia "NVreg_TemporaryFilePath=/var/tmp"' >> "$nvidia_conf"
-      echo 'options nvidia "NVreg_EnableS0ixPowerManagement=1"' >> "$nvidia_conf"
-      _echo_success
-
-      _echo_step_info "Create pacman hook to update nvidia module in initcpio"
-      mkdir -p /mnt/usr/share/libalpm/hooks
-      # shellcheck disable=SC2154
-      cat <<EOF > /mnt/usr/share/libalpm/hooks/50-nvidia-dkms.hook 
-[Trigger]
-Operation=Install
-Operation=Upgrade
-Operation=Remove
-Type=Package
-Target=nvidia-dkms
-Target=$CHOCO_KERNEL
-
-[Action]
-Description=Update Nvidia DKMS module in initcpio
-Depends=mkinitcpio
-When=PostTransaction
-NeedsTargets
-Exec=/bin/sh -c 'while read -r trg; do case \$trg in linux*) exit 0; esac; done; /usr/bin/mkinitcpio -P'
-EOF
-      _echo_success; echo
     else
       # https://wiki.archlinux.org/title/Nouveau
-      _echo_step_info "Install NVIDIA nouveau open source gpu drivers"; echo
-      installChrootPkg xf86-video-nouveau
-      _echo_success
-
-      _echo_step_info "Add nouveau module to mkinitcpio.conf"; echo
-      sed -i "s/^MODULES=(/&nouveau /" /mnt/etc/mkinitcpio.conf
-      arch-chroot /mnt mkinitcpio -p "$CHOCO_KERNEL"
+      _echo_step_info "Install NVIDIA open source gpu drivers"; echo
+      installChrootPkg linux-headers nvidia-open-dkms nvidia-utils nvidia-settings lib32-nvidia-utils
       _echo_success
     fi
+
+    _echo_step_info "Add nvidia_drm to bootloader"; echo
+    sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="[^"]*/& nvidia_drm.modeset=1/' /mnt/etc/default/grub
+    _echo_success
+
+    _echo_step_info "Generate new grub config"; echo
+    arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg
+    _echo_success
+
+    _echo_step_info "Add NVIDIA modules to mkinitcpio and generate /boot/initramfs-custom.img"; echo
+    sed -i "s/^MODULES=(/&nvidia nvidia_modeset nvidia_uvm nvidia_drm /" /mnt/etc/mkinitcpio.conf
+    arch-chroot /mnt mkinitcpio -p "$CHOCO_KERNEL" 
+    _echo_success
+
+    _echo_step_info "Add nvidia-drm settings to modeprobe.d"; echo
+    local nvidia_conf=/mnt/etc/modprobe.d/nvidia.conf
+    echo "options nvidia-drm modeset=1 fbdev=1" > "$nvidia_conf"
+    echo 'options nvidia "NVreg_UsePageAttributeTable=1"' >> "$nvidia_conf"
+    echo 'options nvidia "NVreg_InitializeSystemMemoryAllocations=0"' >> "$nvidia_conf"
+    echo 'options nvidia "NVreg_DynamicPowerManagement=0x02"' >> "$nvidia_conf"
+    echo 'options nvidia "NVreg_PreserveVideoMemoryAllocations=1"' >> "$nvidia_conf"
+    echo 'options nvidia "NVreg_TemporaryFilePath=/var/tmp"' >> "$nvidia_conf"
+    echo 'options nvidia "NVreg_EnableGpuFirmware=0"' >> "$nvidia_conf"
+
+    _echo_success; echo
   fi
 
   if lspci -k | grep -A 2 -E "(VGA|3D)" | grep AMD; then
