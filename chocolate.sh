@@ -20,7 +20,7 @@ CHOCO_SNAPPER=false # configure snapper for automatic snapshots of the @root sub
 CHOCO_PROBER=false # probe for other os when configuring grub
 CHOCO_EFI="" # windows efi partition to mount to /CHOCO_EFI_PATH in chroot for dual boot
 CHOCO_EFI_PATH="/boot" # path to mount the efi partition
-CHOCO_GRUBID="GRUB" # id for the grub bootloader
+CHOCO_GRUBID="ARCHLINUX" # id for the grub bootloader
 
 # system
 CHOCO_ZEN=false # use the zen kernel
@@ -709,6 +709,11 @@ function essentialPkgs() {
   else
     echo
   fi
+
+  # install kernel headers
+  _echo_step_info "Install $CHOCO_KERNEL headers"; echo
+  installChrootPkg "${CHOCO_KERNEL}-headers"
+  _echo_success
   
   # export a package list at current step
   arch-chroot /mnt pacman -Qe > /mnt/var/log/chocolate_packages_list_02_essentials.log
