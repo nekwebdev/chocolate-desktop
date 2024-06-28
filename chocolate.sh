@@ -20,6 +20,7 @@ CHOCO_SNAPPER=false # configure snapper for automatic snapshots of the @root sub
 CHOCO_PROBER=false # probe for other os when configuring grub
 CHOCO_EFI="" # windows efi partition to mount to /CHOCO_EFI_PATH in chroot for dual boot
 CHOCO_EFI_PATH="/boot" # path to mount the efi partition
+CHOCO_GRUBID="GRUB" # id for the grub bootloader
 
 # system
 CHOCO_ZEN=false # use the zen kernel
@@ -837,7 +838,7 @@ function configureSys() {
   fi
 
   _echo_step_info "Run grub-install"; echo
-  arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory="$CHOCO_EFI_PATH" --bootloader-id=GRUB
+  arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory="$CHOCO_EFI_PATH" --bootloader-id=$CHOCO_GRUBID
   _echo_success
 
   if $CHOCO_LUKS; then
@@ -1083,12 +1084,12 @@ function vgaDrivers() {
     if $CHOCO_NVIDIA; then
       # https://wiki.archlinux.org/title/NVIDIA
       _echo_step_info "Install NVIDIA prorietary gpu drivers"; echo
-      installChrootPkg linux-headers nvidia-dkms nvidia-utils nvidia-settings lib32-nvidia-utils
+      installChrootPkg "${CHOCO_KERNEL}-headers" nvidia-dkms nvidia-utils nvidia-settings lib32-nvidia-utils
       _echo_success
     else
       # https://wiki.archlinux.org/title/Nouveau
       _echo_step_info "Install NVIDIA open source gpu drivers"; echo
-      installChrootPkg linux-headers nvidia-open-dkms nvidia-utils nvidia-settings lib32-nvidia-utils
+      installChrootPkg "${CHOCO_KERNEL}-headers" nvidia-open-dkms nvidia-utils nvidia-settings lib32-nvidia-utils
       _echo_success
     fi
 
