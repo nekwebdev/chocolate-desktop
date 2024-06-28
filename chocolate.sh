@@ -704,15 +704,6 @@ function essentialPkgs() {
   if [[ -n $microcode ]]; then
     _echo_step_info "Install microcode: $microcode"; echo
     installChrootPkg "$microcode"
-    if [[ $microcode == "amd-ucode" ]]; then
-      _echo_step_info "Add AMD pstate to bootloader"; echo
-      sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="[^"]*/& amd_pstate=active/' /mnt/etc/default/grub
-      _echo_success
-
-      _echo_step_info "Generate new grub config"; echo
-      arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg
-      _echo_success
-    fi
     _echo_success
   else
     echo
@@ -860,6 +851,16 @@ function configureSys() {
   if $CHOCO_PROBER; then
     _echo_step_info "Edit grub config for os-prober"; echo
     sed -i "s/.*GRUB_DISABLE_OS_PROBER=.*/GRUB_DISABLE_OS_PROBER=false/" /mnt/etc/default/grub
+    _echo_success
+  fi
+
+  if [[ $microcode == "amd-ucode" ]]; then
+    _echo_step_info "Add AMD pstate to bootloader"; echo
+    sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="[^"]*/& amd_pstate=active/' /mnt/etc/default/grub
+    _echo_success
+
+    _echo_step_info "Generate new grub config"; echo
+    arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg
     _echo_success
   fi
 
